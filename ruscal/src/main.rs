@@ -4,7 +4,7 @@ use nom::{
     branch::alt,
     bytes::complete::tag,
     character::complete::{
-	alpha1, alphanumeric1, multispace0, char,
+	alpha1, alphanumeric1, multispace0, multispace1, char,
     },
     combinator::{opt, recognize},
     error::ParseError,
@@ -39,6 +39,13 @@ fn main() {
 		let value = eval(expr, &variables);
 		variables.insert(name, value);
 	    }
+	    Statement::VarAssign(name, expr) => {
+		if !variables.contains_key(name) {
+		    panic!("Variable {} not defined", name);
+		}
+		let value = eval(expr, &variables);
+		variables.insert(name, value);
+	    }
 	}
     }
 }
@@ -58,6 +65,7 @@ enum Expression<'src> {
 enum Statement<'src> {
     Expression(Expression<'src>),
     VarDef(&'src str, Expression<'src>),
+    VarAssign(&'src str, Expression<'src>),
 }
 
 type Statements<'a> = Vec<Statement<'a>>;
@@ -209,15 +217,22 @@ fn statements(input: &str) -> Result<Statements, nom::error::Error<&str>> {
 }
 
 fn statement(input: &str) -> IResult<&str, Statement> {
-    alt((var_def, expr_statement))(input)
+    alt((var_def, var_assign, expr_statement))(input)
 }
 
 fn var_def(input: &str) -> IResult<&str, Statement> {
-    let (input, _) = space_delimited(tag("var"))(input)?;
+    let (input, _) = delimited(multispace0, tag("var"), multispace1)(input)?;
     let (input, name) = space_delimited(identifier)(input)?;
     let (input, _) = space_delimited(char('='))(input)?;
     let (input, expr) = space_delimited(expr)(input)?;
     Ok((input, Statement::VarDef(name, expr)))
+}
+
+fn var_assign(input: &str) -> IResult<&str, Statement> {
+    let (input, name) = space_delimited(identifier)(input)?;
+    let (input, _) = space_delimited(char('='))(input)?;
+    let (input, expr) = space_delimited(expr)(input)?;
+    Ok((input, Statement::VarAssign(name, expr)))
 }
 
 fn expr_statement(input: &str) -> IResult<&str, Statement> {
